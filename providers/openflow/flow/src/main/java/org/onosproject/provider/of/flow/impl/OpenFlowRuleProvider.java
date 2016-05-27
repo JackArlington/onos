@@ -249,6 +249,7 @@ public class OpenFlowRuleProvider extends AbstractProvider implements FlowRulePr
         for (Map.Entry<OFFlowMod, OpenFlowSwitch> entry : mods.entrySet()) {
             OpenFlowSwitch sw = entry.getValue();
             OFFlowMod mod = entry.getKey();
+//            log.info("Sending message {} to Switch {}", mod.toString(), sw.toString());
             sw.sendMsg(mod);
         }
         installation.verify();

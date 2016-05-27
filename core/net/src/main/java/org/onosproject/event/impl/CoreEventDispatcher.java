@@ -93,10 +93,11 @@ public class CoreEventDispatcher extends DefaultEventSinkRegistry
                     EventSink sink = getSink(event.getClass());
                     if (sink != null) {
                         sink.process(event);
-                    } else {
-                        log.warn("No sink registered for event class {}",
-                                 event.getClass());
                     }
+//                    } else {
+//                        log.warn("No sink registered for event class {}",
+//                                 event.getClass());
+//                    }
                 } catch (Exception e) {
                     log.warn("Error encountered while dispatching event:", e);
                 }

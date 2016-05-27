@@ -135,6 +135,7 @@ public class FlowRuleManager
         for (int i = 0; i < flowRules.length; i++) {
             toAddBatchEntries.add(new FlowRuleBatchEntry(FlowRuleOperation.ADD, flowRules[i]));
         }
+//        log.info("Applying batch");
         applyBatch(new FlowRuleBatchOperation(toAddBatchEntries));
     }
 
@@ -193,6 +194,7 @@ public class FlowRuleManager
         for (DeviceId deviceId : perDeviceBatches.keySet()) {
             FlowRuleBatchOperation b =
                     new FlowRuleBatchOperation(perDeviceBatches.get(deviceId));
+
             Future<CompletedBatchOperation> future = store.storeBatch(b);
             futures.add(future);
         }
