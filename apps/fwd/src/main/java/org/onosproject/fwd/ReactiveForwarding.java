@@ -15,6 +15,11 @@
  */
 package org.onosproject.fwd;
 
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.util.Dictionary;
+import java.util.Set;
+
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Deactivate;
@@ -58,11 +63,6 @@ import org.onosproject.net.sensorflow.SensorTrafficSelector;
 import org.onosproject.net.sensorflow.SensorTrafficTreatment;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
-
-import java.util.Dictionary;
-import java.util.Set;
-
-import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  * Sample reactive forwarding application.
@@ -283,6 +283,8 @@ public class ReactiveForwarding {
                 return;
             }
 
+            // Otherwise, get a set of paths that lead from here to the
+            // destination edge switch.
             Set<Path> paths = topologyService.getPaths(topologyService.currentTopology(),
                     pkt.receivedFrom().deviceId(),
                     dst.location().deviceId());
@@ -293,6 +295,8 @@ public class ReactiveForwarding {
                 return;
             }
 
+            // Otherwise, pick a path that does not lead back to where we
+            // came from; if no such path, flood and bail.
             Path path = pickForwardPath(paths, pkt.receivedFrom().port());
             if (path == null) {
                 log.warn("Doh... don't know where to go... {} -> {} received on {}",

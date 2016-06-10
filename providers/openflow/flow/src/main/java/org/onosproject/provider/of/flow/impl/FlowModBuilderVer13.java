@@ -15,11 +15,8 @@
  */
 package org.onosproject.provider.of.flow.impl;
 
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Optional;
-
+import org.onlab.packet.Ip4Address;
+import org.onosproject.net.PortNumber;
 import org.onosproject.net.flow.FlowRule;
 import org.onosproject.net.flow.TrafficTreatment;
 import org.onosproject.net.flow.instructions.Instruction;
@@ -28,19 +25,19 @@ import org.onosproject.net.flow.instructions.L0ModificationInstruction;
 import org.onosproject.net.flow.instructions.L0ModificationInstruction.ModLambdaInstruction;
 import org.onosproject.net.flow.instructions.L2ModificationInstruction;
 import org.onosproject.net.flow.instructions.L2ModificationInstruction.ModEtherInstruction;
+import org.onosproject.net.flow.instructions.L2ModificationInstruction.ModMplsLabelInstruction;
 import org.onosproject.net.flow.instructions.L2ModificationInstruction.ModVlanIdInstruction;
 import org.onosproject.net.flow.instructions.L2ModificationInstruction.ModVlanPcpInstruction;
-import org.onosproject.net.flow.instructions.L2ModificationInstruction.ModMplsLabelInstruction;
 import org.onosproject.net.flow.instructions.L2ModificationInstruction.PushHeaderInstructions;
 import org.onosproject.net.flow.instructions.L3ModificationInstruction;
 import org.onosproject.net.flow.instructions.L3ModificationInstruction.ModIPInstruction;
-import org.onlab.packet.Ip4Address;
 import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFFlowDelete;
 import org.projectfloodlight.openflow.protocol.OFFlowMod;
 import org.projectfloodlight.openflow.protocol.OFFlowModFlags;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.oxm.OFOxm;
 import org.projectfloodlight.openflow.types.CircuitSignalID;
@@ -56,12 +53,18 @@ import org.projectfloodlight.openflow.types.VlanPcp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Optional;
+
 /**
  * Flow mod builder for OpenFlow 1.3+.
  */
 public class FlowModBuilderVer13 extends FlowModBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(FlowModBuilderVer10.class);
+    private static final int OFPCML_NO_BUFFER = 0xffff;
 
     private final TrafficTreatment treatment;
 
@@ -136,8 +139,6 @@ public class FlowModBuilderVer13 extends FlowModBuilder {
     public OFFlowDelete buildFlowDel() {
         Match match = buildMatch();
         List<OFAction> actions = buildActions();
-        //OFInstruction writeActions =
-                //factory().instructions().writeActions(actions);
 
         long cookie = flowRule().id().value();
 
@@ -174,8 +175,12 @@ public class FlowModBuilderVer13 extends FlowModBuilder {
                 break;
             case OUTPUT:
                 OutputInstruction out = (OutputInstruction) i;
-                actions.add(factory().actions().buildOutput().setPort(
-                        OFPort.of((int) out.port().toLong())).build());
+                OFActionOutput.Builder action = factory().actions().buildOutput()
+                        .setPort(OFPort.of((int) out.port().toLong()));
+                if (out.port().equals(PortNumber.CONTROLLER)) {
+                    action.setMaxLen(OFPCML_NO_BUFFER);
+                }
+                actions.add(action.build());
                 break;
             case GROUP:
             default:
@@ -225,12 +230,12 @@ public class FlowModBuilderVer13 extends FlowModBuilder {
                 PushHeaderInstructions pushHeaderInstructions =
                         (PushHeaderInstructions) l2m;
                 return factory().actions().pushMpls(EthType.of(pushHeaderInstructions
-                                                               .ethernetType().getEtherType()));
+                                                               .ethernetType()));
             case MPLS_POP:
                 PushHeaderInstructions  popHeaderInstructions =
                         (PushHeaderInstructions) l2m;
                 return factory().actions().popMpls(EthType.of(popHeaderInstructions
-                                                          .ethernetType().getEtherType()));
+                                                              .ethernetType()));
             case MPLS_LABEL:
                 ModMplsLabelInstruction mplsLabel =
                         (ModMplsLabelInstruction) l2m;

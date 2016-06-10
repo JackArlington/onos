@@ -5,7 +5,7 @@
     <parent>
         <artifactId>onos-sdnwise-providers</artifactId>
         <groupId>org.onosproject</groupId>
-        <version>1.0.0-WSN-SNAPSHOT</version>
+        <version>1.0.2-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -13,7 +13,7 @@
     <packaging>bundle</packaging>
 
     <properties>
-        <onos.version>1.0.0-WSN-SNAPSHOT</onos.version>
+        <onos.version>1.0.2-SNAPSHOT</onos.version>
     </properties>
 
     <description>ONOS SDNWise protocol sensor node provider</description>

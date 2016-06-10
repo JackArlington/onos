@@ -17,8 +17,10 @@ package org.onosproject.store.trivial.impl;
 
 import com.google.common.base.Function;
 import com.google.common.collect.FluentIterable;
-import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
+import com.google.common.collect.Sets;
+
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Deactivate;
@@ -42,6 +44,7 @@ import org.onosproject.net.provider.ProviderId;
 import org.onosproject.store.AbstractStore;
 import org.slf4j.Logger;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -143,9 +146,11 @@ public class SimpleLinkStore
     @Override
     public Set<Link> getEgressLinks(ConnectPoint src) {
         Set<Link> egress = new HashSet<>();
-        for (LinkKey linkKey : srcLinks.get(src.deviceId())) {
-            if (linkKey.src().equals(src)) {
-                egress.add(links.get(linkKey));
+        synchronized (srcLinks) {
+            for (LinkKey linkKey : srcLinks.get(src.deviceId())) {
+                if (linkKey.src().equals(src)) {
+                    egress.add(links.get(linkKey));
+                }
             }
         }
         return egress;
@@ -154,9 +159,11 @@ public class SimpleLinkStore
     @Override
     public Set<Link> getIngressLinks(ConnectPoint dst) {
         Set<Link> ingress = new HashSet<>();
-        for (LinkKey linkKey : dstLinks.get(dst.deviceId())) {
-            if (linkKey.dst().equals(dst)) {
-                ingress.add(links.get(linkKey));
+        synchronized (dstLinks) {
+            for (LinkKey linkKey : dstLinks.get(dst.deviceId())) {
+                if (linkKey.dst().equals(dst)) {
+                    ingress.add(links.get(linkKey));
+                }
             }
         }
         return ingress;
@@ -266,8 +273,15 @@ public class SimpleLinkStore
         }
     }
 
+    /**
+     * Creates concurrent readable, synchronized HashMultimap.
+     *
+     * @return SetMultimap
+     */
     private static <K, V> SetMultimap<K, V> createSynchronizedHashMultiMap() {
-        return synchronizedSetMultimap(HashMultimap.<K, V>create());
+        return synchronizedSetMultimap(
+               Multimaps.newSetMultimap(new ConcurrentHashMap<K, Collection<V>>(),
+                                       () -> Sets.newConcurrentHashSet()));
     }
 
     /**

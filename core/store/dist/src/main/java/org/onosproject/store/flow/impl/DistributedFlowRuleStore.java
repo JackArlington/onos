@@ -16,10 +16,13 @@
 package org.onosproject.store.flow.impl;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static org.onosproject.net.flow.FlowRuleEvent.Type.RULE_REMOVED;
-import static org.slf4j.LoggerFactory.getLogger;
-import static org.onosproject.store.flow.impl.FlowStoreMessageSubjects.*;
 import static org.onlab.util.Tools.namedThreads;
+import static org.onosproject.net.flow.FlowRuleEvent.Type.RULE_REMOVED;
+import static org.onosproject.store.flow.impl.FlowStoreMessageSubjects.APPLY_BATCH_FLOWS;
+import static org.onosproject.store.flow.impl.FlowStoreMessageSubjects.GET_DEVICE_FLOW_ENTRIES;
+import static org.onosproject.store.flow.impl.FlowStoreMessageSubjects.GET_FLOW_ENTRY;
+import static org.onosproject.store.flow.impl.FlowStoreMessageSubjects.REMOVE_FLOW_ENTRY;
+import static org.slf4j.LoggerFactory.getLogger;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -27,6 +30,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -37,7 +41,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.List;
 
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
@@ -45,6 +48,7 @@ import org.apache.felix.scr.annotations.Deactivate;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.Service;
+import org.onlab.util.KryoNamespace;
 import org.onosproject.cluster.ClusterService;
 import org.onosproject.cluster.NodeId;
 import org.onosproject.net.Device;
@@ -57,11 +61,11 @@ import org.onosproject.net.flow.FlowEntry.FlowEntryState;
 import org.onosproject.net.flow.FlowId;
 import org.onosproject.net.flow.FlowRule;
 import org.onosproject.net.flow.FlowRuleBatchEntry;
+import org.onosproject.net.flow.FlowRuleBatchEntry.FlowRuleOperation;
 import org.onosproject.net.flow.FlowRuleBatchEvent;
 import org.onosproject.net.flow.FlowRuleBatchOperation;
 import org.onosproject.net.flow.FlowRuleBatchRequest;
 import org.onosproject.net.flow.FlowRuleEvent;
-import org.onosproject.net.flow.FlowRuleBatchEntry.FlowRuleOperation;
 import org.onosproject.net.flow.FlowRuleEvent.Type;
 import org.onosproject.net.flow.FlowRuleStore;
 import org.onosproject.net.flow.FlowRuleStoreDelegate;
@@ -79,7 +83,6 @@ import org.onosproject.store.serializers.DecodeTo;
 import org.onosproject.store.serializers.KryoSerializer;
 import org.onosproject.store.serializers.StoreSerializer;
 import org.onosproject.store.serializers.impl.DistributedStoreSerializers;
-import org.onlab.util.KryoNamespace;
 import org.slf4j.Logger;
 
 import com.google.common.cache.Cache;
@@ -157,6 +160,7 @@ public class DistributedFlowRuleStore
                     .register(DistributedStoreSerializers.STORE_COMMON)
                     .nextId(DistributedStoreSerializers.STORE_CUSTOM_BEGIN)
                     .register(FlowRuleEvent.class)
+                    .register(FlowRuleEvent.Type.class)
                     .build();
         }
     };
@@ -330,7 +334,7 @@ public class DistributedFlowRuleStore
         } catch (IOException | TimeoutException | ExecutionException | InterruptedException e) {
             log.warn("Unable to fetch flow store contents from {}", replicaInfo.master().get());
         }
-        return null;
+        return Collections.emptyList();
     }
 
     private Set<FlowEntry> getFlowEntriesInternal(DeviceId deviceId) {
@@ -417,10 +421,13 @@ public class DistributedFlowRuleStore
                 } else if (op.equals(FlowRuleOperation.ADD)) {
                     StoredFlowEntry flowEntry = new DefaultFlowEntry(flowRule);
                     DeviceId deviceId = flowRule.deviceId();
-                    if (!flowEntries.containsEntry(deviceId, flowEntry)) {
-                        flowEntries.put(deviceId, flowEntry);
-                        toAdd.add(batchEntry);
-                    }
+                    Collection<StoredFlowEntry> ft = flowEntries.get(deviceId);
+
+                    // always add requested FlowRule
+                    // Note: 2 equal FlowEntry may have different treatment
+                    ft.remove(flowEntry);
+                    ft.add(flowEntry);
+                    toAdd.add(batchEntry);
                 }
             }
             if (toAdd.isEmpty() && toRemove.isEmpty()) {

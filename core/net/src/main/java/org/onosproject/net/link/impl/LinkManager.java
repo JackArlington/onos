@@ -15,9 +15,6 @@
  */
 package org.onosproject.net.link.impl;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static org.slf4j.LoggerFactory.getLogger;
-
 import java.util.Set;
 
 import org.apache.felix.scr.annotations.Activate;
@@ -54,6 +51,8 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Sets;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  * Provides basic implementation of the link SB &amp; NB APIs.
@@ -274,17 +273,6 @@ public class LinkManager
     // Removes all links in the specified set and emits appropriate events.
     private void  removeLinks(Set<Link> links, boolean isSoftRemove) {
         for (Link link : links) {
-            if (!deviceService.getDevice(link.src().deviceId()).type().equals(
-                    deviceService.getDevice(link.dst().deviceId()).type())) {
-                //TODO this is aweful. need to be fixed so that we don't down
-                // configured links. perhaps add a mechanism to figure out the
-                // state of this link
-                log.info("Ignoring removal of link as device types are " +
-                                 "different {} {} ",
-                         link.src() ,
-                         link.dst());
-                continue;
-            }
             LinkEvent event = isSoftRemove ?
                     store.removeOrDownLink(link.src(), link.dst()) :
                     store.removeLink(link.src(), link.dst());

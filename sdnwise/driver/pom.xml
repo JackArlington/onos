@@ -19,7 +19,7 @@
     <parent>
         <artifactId>onos-sdnwise</artifactId>
         <groupId>org.onosproject</groupId>
-        <version>1.0.0-WSN-SNAPSHOT</version>
+        <version>1.0.2-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -32,18 +32,18 @@
         <dependency>
             <groupId>org.onosproject</groupId>
             <artifactId>onos-sdnwise-api</artifactId>
-            <version>1.0.0-WSN-SNAPSHOT</version>
+            <version>1.0.2-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.onosproject</groupId>
             <artifactId>onos-api</artifactId>
-            <version>1.0.0-WSN-SNAPSHOT</version>
+            <version>1.0.2-SNAPSHOT</version>
         </dependency>
 
         <dependency>
             <groupId>org.onosproject</groupId>
             <artifactId>onlab-osgi</artifactId>
-            <version>1.0.0-WSN-SNAPSHOT</version>
+            <version>1.0.2-SNAPSHOT</version>
         </dependency>
 
         <dependency>
@@ -56,7 +56,7 @@
         <dependency>
             <groupId>org.onosproject</groupId>
             <artifactId>onos-api</artifactId>
-            <version>1.0.0-WSN-SNAPSHOT</version>
+            <version>1.0.2-SNAPSHOT</version>
             <scope>test</scope>
             <classifier>tests</classifier>
         </dependency>

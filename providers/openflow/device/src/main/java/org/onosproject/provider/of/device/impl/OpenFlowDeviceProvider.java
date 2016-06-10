@@ -56,6 +56,8 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.google.common.base.Strings;
+
 import static org.onosproject.net.DeviceId.deviceId;
 import static org.onosproject.net.Port.Type.COPPER;
 import static org.onosproject.net.Port.Type.FIBER;
@@ -184,8 +186,12 @@ public class OpenFlowDeviceProvider extends AbstractProvider implements DevicePr
             Device.Type deviceType = sw.isOptical() ? Device.Type.ROADM :
                     Device.Type.SWITCH;
             ChassisId cId = new ChassisId(dpid.value());
+
             SparseAnnotations annotations = DefaultAnnotations.builder()
-                    .set("protocol", sw.factory().getVersion().toString()).build();
+                    .set("protocol", sw.factory().getVersion().toString())
+                    .set("channelId", sw.channelId())
+                    .build();
+
             DeviceDescription description =
                     new DefaultDeviceDescription(did.uri(), deviceType,
                                                  sw.manfacturerDescription(),
@@ -265,6 +271,23 @@ public class OpenFlowDeviceProvider extends AbstractProvider implements DevicePr
         }
 
         /**
+         * Creates an annotation for the port name if one is available.
+         *
+         * @param port description of the port
+         * @return annotation containing the port name if one is found,
+         *         null otherwise
+         */
+        private SparseAnnotations makePortNameAnnotation(OFPortDesc port) {
+            SparseAnnotations annotations = null;
+            String portName = Strings.emptyToNull(port.getName());
+            if (portName != null) {
+                annotations = DefaultAnnotations.builder()
+                        .set("portName", portName).build();
+            }
+            return annotations;
+        }
+
+        /**
          * Build a portDescription from a given port.
          *
          * @param port the port to build from.
@@ -276,7 +299,9 @@ public class OpenFlowDeviceProvider extends AbstractProvider implements DevicePr
                     !port.getState().contains(OFPortState.LINK_DOWN) &&
                             !port.getConfig().contains(OFPortConfig.PORT_DOWN);
             Port.Type type = port.getCurr().contains(OFPortFeatures.PF_FIBER) ? FIBER : COPPER;
-            return new DefaultPortDescription(portNo, enabled, type, portSpeed(port));
+            SparseAnnotations annotations = makePortNameAnnotation(port);
+            return new DefaultPortDescription(portNo, enabled, type,
+                                              portSpeed(port), annotations);
         }
 
         private PortDescription buildPortDescription(OFPortStatus status) {
@@ -286,7 +311,9 @@ public class OpenFlowDeviceProvider extends AbstractProvider implements DevicePr
             } else {
                 PortNumber portNo = PortNumber.portNumber(port.getPortNo().getPortNumber());
                 Port.Type type = port.getCurr().contains(OFPortFeatures.PF_FIBER) ? FIBER : COPPER;
-                return new DefaultPortDescription(portNo, false, type, portSpeed(port));
+                SparseAnnotations annotations = makePortNameAnnotation(port);
+                return new DefaultPortDescription(portNo, false, type,
+                                                  portSpeed(port), annotations);
             }
         }
 

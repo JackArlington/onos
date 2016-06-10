@@ -15,6 +15,11 @@
  */
 package org.onosproject.provider.host.impl;
 
+import static org.slf4j.LoggerFactory.getLogger;
+
+import java.util.Dictionary;
+import java.util.Set;
+
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Deactivate;
@@ -22,14 +27,28 @@ import org.apache.felix.scr.annotations.Modified;
 import org.apache.felix.scr.annotations.Property;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.onlab.packet.ARP;
+import org.onlab.packet.Ethernet;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.VlanId;
+import org.onosproject.core.ApplicationId;
+import org.onosproject.core.CoreService;
 import org.onosproject.net.ConnectPoint;
-import org.onosproject.net.DeviceId;
+import org.onosproject.net.Device;
 import org.onosproject.net.Host;
 import org.onosproject.net.HostId;
 import org.onosproject.net.HostLocation;
+import org.onosproject.net.PortNumber;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
 import org.onosproject.net.host.DefaultHostDescription;
 import org.onosproject.net.host.HostDescription;
 import org.onosproject.net.host.HostProvider;
@@ -43,17 +62,8 @@ import org.onosproject.net.provider.AbstractProvider;
 import org.onosproject.net.provider.ProviderId;
 import org.onosproject.net.topology.Topology;
 import org.onosproject.net.topology.TopologyService;
-import org.onlab.packet.ARP;
-import org.onlab.packet.Ethernet;
-import org.onlab.packet.IpAddress;
-import org.onlab.packet.VlanId;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
-
-import java.util.Dictionary;
-import java.util.Set;
-
-import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  * Provider which uses an OpenFlow controller to detect network
@@ -63,6 +73,14 @@ import static org.slf4j.LoggerFactory.getLogger;
 public class HostLocationProvider extends AbstractProvider implements HostProvider {
 
     private final Logger log = getLogger(getClass());
+
+    private static final int FLOW_RULE_PRIORITY = 40000;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected CoreService coreService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected FlowRuleService flowRuleService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected HostProviderRegistry providerRegistry;
@@ -84,6 +102,8 @@ public class HostLocationProvider extends AbstractProvider implements HostProvid
     private final InternalHostProvider processor = new InternalHostProvider();
     private final DeviceListener deviceListener = new InternalDeviceListener();
 
+    private ApplicationId appId;
+
     @Property(name = "hostRemovalEnabled", boolValue = true,
             label = "Enable host removal on port/device down events")
     private boolean hostRemovalEnabled = true;
@@ -98,10 +118,15 @@ public class HostLocationProvider extends AbstractProvider implements HostProvid
 
     @Activate
     public void activate(ComponentContext context) {
+        appId =
+            coreService.registerApplication("org.onosproject.provider.host");
+
         modified(context);
         providerService = providerRegistry.register(this);
         pktService.addProcessor(processor, 1);
         deviceService.addListener(deviceListener);
+        pushRules();
+
         log.info("Started");
     }
 
@@ -133,6 +158,36 @@ public class HostLocationProvider extends AbstractProvider implements HostProvid
         log.info("Triggering probe on device {}", host);
     }
 
+    /**
+     * Pushes flow rules to all devices.
+     */
+    private void pushRules() {
+        for (Device device : deviceService.getDevices()) {
+            pushRules(device);
+        }
+    }
+
+    /**
+     * Pushes flow rules to the device to receive control packets that need
+     * to be processed.
+     *
+     * @param device the device to push the rules to
+     */
+    private synchronized void pushRules(Device device) {
+        TrafficSelector.Builder sbuilder = DefaultTrafficSelector.builder();
+        TrafficTreatment.Builder tbuilder = DefaultTrafficTreatment.builder();
+
+        // Get all ARP packets
+        sbuilder.matchEthType(Ethernet.TYPE_ARP);
+        tbuilder.setOutput(PortNumber.CONTROLLER);
+        FlowRule flowArp =
+            new DefaultFlowRule(device.id(),
+                                sbuilder.build(), tbuilder.build(),
+                                FLOW_RULE_PRIORITY, appId, 0, true);
+
+        flowRuleService.applyFlowRules(flowArp);
+    }
+
     private class InternalHostProvider implements PacketProcessor {
 
         @Override
@@ -141,6 +196,10 @@ public class HostLocationProvider extends AbstractProvider implements HostProvid
                 return;
             }
             Ethernet eth = context.inPacket().parsed();
+
+            if (eth == null) {
+                return;
+            }
 
             VlanId vlan = VlanId.vlanId(eth.getVlanID());
             ConnectPoint heardOn = context.inPacket().receivedFrom();
@@ -179,23 +238,40 @@ public class HostLocationProvider extends AbstractProvider implements HostProvid
     private class InternalDeviceListener implements DeviceListener {
         @Override
         public void event(DeviceEvent event) {
-            if (!hostRemovalEnabled) {
-                return;
-            }
-
-            DeviceEvent.Type type = event.type();
-            DeviceId deviceId = event.subject().id();
-            if (type == DeviceEvent.Type.PORT_UPDATED) {
-                ConnectPoint point = new ConnectPoint(deviceId, event.port().number());
-                removeHosts(hostService.getConnectedHosts(point));
-
-            } else if (type == DeviceEvent.Type.DEVICE_AVAILABILITY_CHANGED) {
-                if (!deviceService.isAvailable(deviceId)) {
-                    removeHosts(hostService.getConnectedHosts(deviceId));
+            Device device = event.subject();
+            switch (event.type()) {
+            case DEVICE_ADDED:
+                pushRules(device);
+                break;
+            case DEVICE_AVAILABILITY_CHANGED:
+                if (hostRemovalEnabled &&
+                    !deviceService.isAvailable(device.id())) {
+                    removeHosts(hostService.getConnectedHosts(device.id()));
                 }
-
-            } else if (type == DeviceEvent.Type.DEVICE_REMOVED) {
-                removeHosts(hostService.getConnectedHosts(deviceId));
+                break;
+            case DEVICE_SUSPENDED:
+            case DEVICE_UPDATED:
+                // Nothing to do?
+                break;
+            case DEVICE_REMOVED:
+                if (hostRemovalEnabled) {
+                    removeHosts(hostService.getConnectedHosts(device.id()));
+                }
+                break;
+            case PORT_ADDED:
+                break;
+            case PORT_UPDATED:
+                if (hostRemovalEnabled) {
+                    ConnectPoint point =
+                        new ConnectPoint(device.id(), event.port().number());
+                    removeHosts(hostService.getConnectedHosts(point));
+                }
+                break;
+            case PORT_REMOVED:
+                // Nothing to do?
+                break;
+            default:
+                break;
             }
         }
     }

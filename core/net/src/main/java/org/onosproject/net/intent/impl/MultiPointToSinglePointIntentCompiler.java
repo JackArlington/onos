@@ -15,12 +15,8 @@
  */
 package org.onosproject.net.intent.impl;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Deactivate;
@@ -39,7 +35,12 @@ import org.onosproject.net.intent.PointToPointIntent;
 import org.onosproject.net.resource.LinkResourceAllocations;
 import org.onosproject.net.topology.PathService;
 
-import com.google.common.collect.Sets;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * An intent compiler for
@@ -71,12 +72,17 @@ public class MultiPointToSinglePointIntentCompiler
         Map<DeviceId, Link> links = new HashMap<>();
 
         for (ConnectPoint ingressPoint : intent.ingressPoints()) {
+            if (ingressPoint.deviceId().equals(intent.egressPoint().deviceId())) {
+                continue;
+            }
             Path path = getPath(ingressPoint, intent.egressPoint());
             for (Link link : path.links()) {
                 if (links.containsKey(link.src().deviceId())) {
                     // We've already reached the existing tree with the first
-                    // part of this path. Don't add the remainder of the path
+                    // part of this path. Add the merging point with differen
+                    // incoming port, but don't add the remainder of the path
                     // in case it differs from the path we already have.
+                    links.put(link.src().deviceId(), link);
                     break;
                 }
 
@@ -86,7 +92,10 @@ public class MultiPointToSinglePointIntentCompiler
 
         Intent result = new LinkCollectionIntent(intent.appId(),
                                                  intent.selector(), intent.treatment(),
-                                                 Sets.newHashSet(links.values()), intent.egressPoint());
+                                                 Sets.newHashSet(links.values()),
+                                                 intent.ingressPoints(),
+                                                 ImmutableSet.of(intent.egressPoint()),
+                                                 Collections.emptyList());
         return Arrays.asList(result);
     }
 
